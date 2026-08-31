@@ -286,6 +286,17 @@ export interface CollectedFile {
   readonly error?: string | undefined;
 }
 
+const loadCollectedTestModule = async (absolute: string): Promise<void> => {
+  if (typeof Bun !== "undefined") {
+    // Bun's dynamic import() does not propagate AsyncLocalStorage into the
+    // imported module's top-level evaluation (observed on bun 1.4+).
+    // require() preserves the collector context during registration.
+    require(absolute);
+    return;
+  }
+  await import(pathToFileURL(absolute).href);
+};
+
 const collectFile = (
   absolute: string,
   relative: string,
@@ -293,7 +304,7 @@ const collectFile = (
   Effect.promise(async (): Promise<CollectedFile> => {
     try {
       const suite = await Registry.collect(relative, async () => {
-        await import(pathToFileURL(absolute).href);
+        await loadCollectedTestModule(absolute);
         // Flush microtasks + one macrotask so registrations deferred with
         // queueMicrotask (e.g. Test.make's fallback afterAll) land in the
         // tree — their AsyncLocalStorage context resolves this file's collector.
